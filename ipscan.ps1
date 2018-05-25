@@ -16,7 +16,6 @@ Function scan {
     $fullResult = @()
     $fullLog = @()
 
-    $threadLimit = 30
     $SessionState = [system.management.automation.runspaces.initialsessionstate]::CreateDefault()
     $threadPool = [runspacefactory]::CreateRunspacePool(1, $threadLimit, $SessionState, $Host)
     $threadPool.Open()
@@ -57,12 +56,8 @@ Function scan {
     Do {
        Start-Sleep -Seconds 1
     } While ($workArray.Handle.IsCompleted -contains $false)
-    $endTime = Get-Date
-    $spendTime = $endTime - $beginTime
-    $spendSec = $spendTime.TotalSeconds
     Write-Output `r
-    Write-Output "All Pings Completed in $spendSec seconds."
-    Write-Output "Getting Result. . ."
+    Write-Output "Ping end. Getting result. . ."
     foreach ($w in $workArray) {
         if ($VerbosePreference -eq "Continue") {
             $fullResult += $w.IP + "..." + $w.Pipe.EndInvoke($w.Handler).Result
@@ -73,12 +68,16 @@ Function scan {
         Write-Verbose `r$r
     }
     [Io.file]::WriteAllLines($logPath, $fullLog,[text.encoding]::Unicode)
+    $endTime = Get-Date
+    $spendTime = $endTime - $beginTime
+    $spendSec = $spendTime.TotalSeconds
+    Write-Output "All Completed in $spendSec Seconds."
     Write-Output "Ping result log saved to ipscan.txt."
     Write-Output -----------------------------------
 }
 
 Function wrongUsage {
-    Write-Warning "`rUsage: `".\ipscan 192.168.1. [-s silent]`""
+    Write-Warning "`rUsage: `".\ipscan.ps1 <192.168.1.> [-s silent] [-t=<num> thread]`""
     exit
 }
 
@@ -92,13 +91,19 @@ Function invalidOption {
 
 
 # exec options
+$VerbosePreference = "Continue"
+$threadLimit = 30
 if ($ipGroup -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}\.$') {
     wrongUsage
 }
-$VerbosePreference = "Continue"
 foreach ($a in $args) {
     switch ($a) {
-        {($_ -eq '-s') -or ($_ -eq '-silent') } {$VerbosePreference = "SilentlyContinue"}
+        {($_ -eq '-s') -or ($_ -eq '--silent')} {
+            $VerbosePreference = "SilentlyContinue"
+        }
+        {($_ -match '^-t=\d+$') -or ($_ -match '^--thread=\d+$')} {
+            $threadLimit = [int][regex]::matches($_, '\d+').Value
+        }
         Default {invalidOption $a}
     }
 }
